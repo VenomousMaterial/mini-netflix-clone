@@ -3,6 +3,7 @@ import VueRouter from 'vue-router'
 
 import HomeView from '@/views/HomeView.vue'
 import MovieView from '@/views/MovieView.vue'
+import AboutView from '@/views/AboutView.vue'
 import ErrorView from '@/views/ErrorView.vue'
 
 Vue.use(VueRouter)
@@ -19,7 +20,12 @@ const routes = [
     component: MovieView
   },
   {
-    path: '/404',
+    path: '/about',
+    name: 'about',
+    component: AboutView
+  },
+  {
+    path: '*',
     name: 'error',
     component: ErrorView
   },

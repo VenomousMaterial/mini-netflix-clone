@@ -1,26 +1,23 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
 import router from '@/router'
-import axios from 'axios'
 
-import {
-  OMDB_URL_ID,
-  OMDB_URL_SEARCH,
-  OMDB_API_KEY_PARAM
-} from '@/constants/urls'
+import { fetchMovieById, fetchChristmasMovies } from '@/services/moviesService'
 
 Vue.use(Vuex)
 
 export const state = {
   fetchedMovies: [],
   fetchedMovieIds: [],
-  selectedMovieId: null
+  selectedMovieId: null,
+  selectedMovie: null
 }
 
 export const mutations = {
   setMovies: (state, payload) => { state.fetchedMovies = payload },
   setMovieIds: (state, payload) => { state.fetchedMovieIds = payload },
   setSelectedMovieId: (state, payload) => { state.selectedMovieId = payload },
+  setSelectedMovie: (state, payload) => { state.selectedMovie = payload },
 
   addMovieToList: (state, payload) => {
     state.fetchedMovies.push(payload)
@@ -28,9 +25,8 @@ export const mutations = {
   },
 
   addMovieDetailsToexisting: (state, payload) => {
-    console.log('test', payload)
     const selectedIndex = state.fetchedMovies.findIndex((movie) => {
-      return movie.imdbID === state.selectedMovieId
+      return movie.imdbID === payload.imdbID
     })
     state.fetchedMovies[selectedIndex] = payload
   },
@@ -38,53 +34,53 @@ export const mutations = {
 
 export const actions = {
   fetchInitialMovies: async ({ commit }) => {
-    await axios.get(OMDB_URL_SEARCH + 'christmas' + OMDB_API_KEY_PARAM)
-      .then((response) => {
-        const movieIds = response.data.Search.map((movie) => {
-          return movie.imdbID
-        })
-        commit('setMovieIds', movieIds)
-        commit('setMovies', response.data.Search)
-      }).catch((error) => {
-        // in a production app, this is where error logging would take place
-        console.log(error)
-      })
+    const christmasMovies = await fetchChristmasMovies()
+    const christmasMovieIds = christmasMovies.map((movie) => {
+      return movie.imdbID
+    })
+    commit('setMovieIds', christmasMovieIds)
+    commit('setMovies', christmasMovies)
   },
 
-  // work on saving the detailed data after fetching it,
-  // then displaying it in the movie view
-
-  fetchMovieById: async ({ commit, getters }, movieId) => {
-    if (!getters.getSelectedMovieById.detailed) {
-      try {
-        return await axios.get(
-          OMDB_URL_ID + movieId + OMDB_API_KEY_PARAM
-        ).then((response) => {
-          if (getters.getFetchedIds.includes(movieId)) {
-            response.data.detailed = true
-            console.log('gerer', response.data)
-            commit('addMovieDetailsToexisting', response.data)
-          } else {
-            commit('addMovieToList', response.data)
-          }
-          commit('setSelectedMovieId', movieId)
-        })
-      } catch (error) {
-        console.log(error)
-      }
+  fetchMovieByIdFromRouteParams: async ({ commit, getters }, movieId) => {
+    commit('setSelectedMovieId', movieId)
+    /**
+     * 3 possible scenarios
+     *
+     * 1 - movie is not previously fetched at all
+     * 2 - previously fetched for home page, but lacks extra details
+     * 3 - previously fetched for details page and has extra details
+     */
+    if (!getters.getFetchedIds.includes(movieId)) {
+      const newMovie = await fetchMovieById(movieId)
+      commit('addMovieToList', newMovie)
+      commit('setSelectedMovie', newMovie)
+    } else if (!Object.keys(getters.getSelectedMovieById).includes('detailed')) {
+      const newMovieData = await fetchMovieById(movieId)
+      commit('addMovieDetailsToexisting', newMovieData)
+      commit('setSelectedMovie', newMovieData)
+    } else {
+      // if we've gotten to this point, then we know that it's already got details, so just load it
+      const movie = getters.getFetchedMovies.find((movie) => movie.imdbID === movieId)
+      commit('setSelectedMovie', movie)
     }
   },
 
   selectMovieById: ({ commit }, movieId) => {
     commit('setSelectedMovieId', movieId)
     router.push(`/movie/${movieId}`)
+  },
+
+  deselectMovie: ({ commit }) => {
+    commit('setSelectedMovieId', null)
+    commit('setSelectedMovie', null)
   }
 }
 
 export const getters = {
   getFetchedMovies: state => { return state.fetchedMovies },
   getFetchedIds: state => { return state.fetchedMovieIds },
-  getSelectedMovieId: state => { return state.selectedMovieId },
+  getSelectedMovie: state => { return state.selectedMovie },
 
   getSelectedMovieById: state => {
     return state.fetchedMovies.find((movie) => {
